@@ -1,3 +1,5 @@
+var args = [];
+
 function boot() {
     var shell = document.getElementById('shell_input');
 
@@ -7,6 +9,7 @@ function boot() {
     // 起動時の表示
     printshell("ysh ver.0.1\n");
     printshell("(c) YotioSoft 2022 All rights reserved.\n\n");
+    printshell("To see the list of commands, run \"help\" command.\n\n");
 }
 
 function printshell(str) {
@@ -15,7 +18,8 @@ function printshell(str) {
 }
 
 function waiting() {
-    var shell = document.getElementById('shell_input');
+    // 引数配列をクリア
+    args = [];
 
     // 入力受付状態を示す
     printshell("> ");
@@ -47,10 +51,12 @@ function onInputCompleted() {
 }
 
 function parse(str) {
-    console.log(str);
-    
+    // パース
+    args = str.split(" ");
+
+    // 実行
     try {
-        func_obj[str]();
+        func_obj[args[0]]();
         return true;
     }
     catch {
@@ -58,8 +64,28 @@ function parse(str) {
     }
 }
 
+function get_arg(num) {
+    return args[num];
+}
+
 var func_obj = [];
 
-func_obj.hello = function() {
+func_obj["echo"] = function() {
+    for (var i=1; i<args.length; i++) {
+        printshell(get_arg(i) + " ");
+    }
+    printshell("\n");
+}
+
+func_obj["hello"] = function() {
     printshell("Hello!\n");
+}
+
+func_obj["help"] = function() {
+    // func_objに登録されたコマンド一覧を表示
+    printshell(Object.keys(func_obj).length + " commands exist:\n");
+
+    for (cmd in func_obj) {
+        printshell(cmd + "\n");
+    }
 }
