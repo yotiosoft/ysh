@@ -1,7 +1,12 @@
 var args = [];
+var dirs = [];
+var current_dir = "/";
 
 function boot() {
     var shell = document.getElementById('shell_input');
+
+    // ディレクトリの初期化
+    dirs["/"] = [];
 
     // 入力完了時の動作
     shell.addEventListener('keyup', on_key_press);
@@ -70,6 +75,15 @@ function get_arg(num) {
 
 var func_obj = [];
 
+func_obj["cd"] = function() {
+    if (get_arg(1) in dirs) {
+        current_dir = get_arg(1);
+    }
+    else {
+        printshell(get_arg(1) + " not found.\n");
+    }
+}
+
 func_obj["echo"] = function() {
     for (var i=1; i<args.length; i++) {
         printshell(get_arg(i) + " ");
@@ -88,4 +102,19 @@ func_obj["help"] = function() {
     for (cmd in func_obj) {
         printshell(cmd + "\n");
     }
+}
+
+func_obj["ls"] = function() {
+    for (var i=0; i<dirs[current_dir].length; i++) {
+        printshell(dirs[current_dir][i]+ "\n");
+    }
+}
+
+func_obj["mkdir"] = function() {
+    dirs[current_dir + get_arg(1) + "/"] = [];
+    dirs[current_dir].push(current_dir + get_arg(1) + "/");
+}
+
+func_obj["pwd"] = function() {
+    printshell(current_dir + "\n");
 }
