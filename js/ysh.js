@@ -22,6 +22,11 @@ function printshell(str) {
     shell.value += str;
 }
 
+function shellclear() {
+    var shell = document.getElementById('shell_input');
+    shell.value = "";
+}
+
 function waiting() {
     // 引数配列をクリア
     args = [];
@@ -82,6 +87,10 @@ func_obj["cd"] = function() {
     else {
         printshell(get_arg(1) + " not found.\n");
     }
+}
+
+func_obj["clear"] = function() {
+    shellclear();
 }
 
 func_obj["echo"] = function() {
