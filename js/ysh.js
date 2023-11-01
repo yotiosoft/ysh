@@ -13,13 +13,14 @@ function boot() {
 
     // 起動時の表示
     printshell("ysh ver.0.1\n");
-    printshell("(c) YotioSoft 2022 All rights reserved.\n\n");
+    printshell("(c) YotioSoft 2022-2023 All rights reserved.\n\n");
     printshell("To see the list of commands, run \"help\" command.\n\n");
 }
 
 function printshell(str) {
     var shell = document.getElementById('shell_input');
     shell.value += str;
+    shell.scrollTop = shell.scrollHeight;
 }
 
 function shellclear() {
