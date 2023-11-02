@@ -53,9 +53,9 @@ function onInputCompleted() {
     var last_line = lines[lines.length - 2].substring(2);
     var ret = parse(last_line);
 
-    if (ret == 1) {
-        printshell("command returns an error.\n");
-    }
+    //if (ret == 1) {
+    //    printshell("command returns an error.\n");
+    //}
 
     // 次の入力へ
     waiting();
@@ -69,7 +69,7 @@ function parse(str) {
     if (args[0] in func_obj) {
         return func_obj[args[0]]();
     }
-    printshell("command not found: " + last_line.split(" ")[0] + '\n');
+    printshell("command not found: " + args[0] + '\n');
     return 1;
 }
 
