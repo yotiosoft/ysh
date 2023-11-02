@@ -1,12 +1,12 @@
 var args = [];
 var dirs = [];
-var current_dir = "/";
+var current_dir = "/root/";
 
 function boot() {
     var shell = document.getElementById('shell_input');
 
     // ディレクトリの初期化
-    dirs["/"] = [];
+    dirs["/root/"] = [];
 
     // 入力完了時の動作
     shell.addEventListener('keyup', on_key_press);
@@ -53,8 +53,8 @@ function onInputCompleted() {
     var last_line = lines[lines.length - 2].substring(2);
     var ret = parse(last_line);
 
-    if (!ret) {
-        printshell("command not found: " + last_line.split(" ")[0] + '\n');
+    if (ret == 1) {
+        printshell("command returns an error.\n");
     }
 
     // 次の入力へ
@@ -66,32 +66,80 @@ function parse(str) {
     args = str.split(" ");
 
     // 実行
-    try {
-        func_obj[args[0]]();
-        return true;
+    if (args[0] in func_obj) {
+        return func_obj[args[0]]();
     }
-    catch {
-        return false;
-    }
+    printshell("command not found: " + last_line.split(" ")[0] + '\n');
+    return 1;
 }
 
 function get_arg(num) {
     return args[num];
 }
 
+function parse_path(path_str) {
+    var path = path_str.split("/");
+    console.log(path_str);
+    console.log(path);
+
+    // カレントディレクトリを起点にしてパスを解決
+    var resoving_path = current_dir.split("/");
+    if (resoving_path[resoving_path.length - 1] == "") {
+        resoving_path.pop();
+    }
+    for (var i=0; i<path.length; i++) {
+        if (path[i] == ".") {
+            // 何もしない
+            continue;
+        }
+        else if (path[i] == "..") {
+            // 一つ上のディレクトリに移動
+            console.log("  bpop " + resoving_path);
+            resoving_path.pop();
+            console.log("  apop " + resoving_path);
+        }
+        else {
+            resoving_path.push(path[i]);
+        }
+    }
+
+    // パス文字列を生成
+    var ret_path_str = "/";
+    for (var i=0; i<resoving_path.length; i++) {
+        if (resoving_path[i] == "") {
+            continue;
+        }
+        ret_path_str += resoving_path[i] + "/";
+    }
+
+    return ret_path_str;
+}
+
 var func_obj = [];
 
 func_obj["cd"] = function() {
     if (get_arg(1) in dirs) {
+        // 絶対パス
         current_dir = get_arg(1);
     }
     else {
-        printshell(get_arg(1) + " not found.\n");
+        // 相対パス
+        var path = parse_path(get_arg(1));
+        console.log(path);
+        if (path in dirs) {
+            current_dir = path;
+        }
+        else {
+            printshell(get_arg(1) + " not found.\n");
+            return 1;
+        }
     }
+    return 0;
 }
 
 func_obj["clear"] = function() {
     shellclear();
+    return 0;
 }
 
 func_obj["echo"] = function() {
@@ -99,10 +147,12 @@ func_obj["echo"] = function() {
         printshell(get_arg(i) + " ");
     }
     printshell("\n");
+    return 0;
 }
 
 func_obj["hello"] = function() {
     printshell("Hello!\n");
+    return 0;
 }
 
 func_obj["help"] = function() {
@@ -112,19 +162,23 @@ func_obj["help"] = function() {
     for (cmd in func_obj) {
         printshell(cmd + "\n");
     }
+    return 0;
 }
 
 func_obj["ls"] = function() {
     for (var i=0; i<dirs[current_dir].length; i++) {
         printshell(dirs[current_dir][i]+ "\n");
     }
+    return 0;
 }
 
 func_obj["mkdir"] = function() {
     dirs[current_dir + get_arg(1) + "/"] = [];
     dirs[current_dir].push(current_dir + get_arg(1) + "/");
+    return 0;
 }
 
 func_obj["pwd"] = function() {
     printshell(current_dir + "\n");
+    return 0;
 }
