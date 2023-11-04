@@ -9,7 +9,7 @@ function boot() {
     dirs["/root/"] = [];
 
     // 入力完了時の動作
-    shell.addEventListener('keyup', on_key_press);
+    shell.addEventListener('keydown', on_key_press);
 
     // 起動時の表示
     printshell("ysh ver.0.1\n");
@@ -37,7 +37,8 @@ function waiting() {
 }
 
 function on_key_press(e) {
-    if (e.key == 'Enter') {
+    if (e.key == 'Enter' && !e.isComposing) {
+        e.preventDefault();
         onInputCompleted();
 
         return true;
@@ -50,8 +51,9 @@ function onInputCompleted() {
 
     // パースを行う
     var lines = shell.value.replace(/\r\n|\r/g,"\n").split('\n');
-    var last_line = lines[lines.length - 2].substring(2);
-    var ret = parse(last_line);
+    var last_line = lines[lines.length - 1].substring(2);
+    shell.value += '\n';
+    var ret = parse_and_run(last_line);
 
     //if (ret == 1) {
     //    printshell("command returns an error.\n");
@@ -61,7 +63,7 @@ function onInputCompleted() {
     waiting();
 }
 
-function parse(str) {
+function parse_and_run(str) {
     // パース
     args = str.split(" ");
 
