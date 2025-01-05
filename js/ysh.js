@@ -58,9 +58,9 @@ function boot() {
     fd_buffers[shell_fd] = new FileDescriptor();
 
     // 起動時の表示
-    printfd("ysh ver.0.1\n");
-    printfd("(c) YotioSoft 2022-2023 All rights reserved.\n\n");
-    printfd("To see the list of commands, run \"help\" command.\n\n");
+    printfd("ysh ver.1.0\n");
+    printfd("(c) YotioSoft 2022-2025 All rights reserved.\n\n");
+    printfd("To see the list of commands, type 'help'.\n");
 }
 
 function newfd() {
@@ -165,13 +165,22 @@ function get_arg(num) {
     return args[num];
 }
 
-function parse_path(path_str) {
+function parse_path(path_str, type) {
     var path = path_str.split("/");
-    console.log(path_str);
-    console.log(path);
 
+    // 絶対パスの場合
+    // /root/ からのパスを解決
+    if (path[0] == "") {
+        var start_dir = "";
+    }
+    // 相対パスの場合
     // カレントディレクトリを起点にしてパスを解決
-    var resoving_path = current_dir.split("/");
+    else {
+        var start_dir = current_dir;
+    }
+    // 相対パスの場合
+    // カレントディレクトリを起点にしてパスを解決
+    var resoving_path = start_dir.split("/");
     if (resoving_path[resoving_path.length - 1] == "") {
         resoving_path.pop();
     }
@@ -197,6 +206,9 @@ function parse_path(path_str) {
         }
         ret_path_str += resoving_path[i] + "/";
     }
+    if (type == TYPE_FILE) {
+        ret_path_str = ret_path_str.substring(0, ret_path_str.length - 1);
+    }
 
     return ret_path_str;
 }
@@ -204,15 +216,19 @@ function parse_path(path_str) {
 // ディレクトリ内のファイル名を取得
 function names_in_dir(dir) {
     var names = [];
-    for (var i=0; i<dirs[dir].length; i++) {
-        names.push(dirs[dir][i].name);
+    if (dir in dirs) {
+        for (var i=0; i<dirs[dir].length; i++) {
+            names.push(dirs[dir][i].name);
+        }
     }
     return names;
 }
-function fullparh_in_dir(dir) {
+function fullpath_in_dir(dir) {
     var fullpaths = [];
-    for (var i=0; i<dirs[dir].length; i++) {
-        fullpaths.push(dirs[dir][i].fullpath);
+    if (dir in dirs) {
+        for (var i=0; i<dirs[dir].length; i++) {
+            fullpaths.push(dirs[dir][i].fullpath);
+        }
     }
     return fullpaths;
 }
@@ -234,9 +250,11 @@ function get_file(path) {
         }
     }
     // カレントディレクトリ外
-    var full_path = parse_path(path);
-    var parent_dir = full_path.split("/").slice(0, -2).join("/") + "/";
-    var file_name = full_path.split("/").slice(-2, -1)[0];
+    var full_path = parse_path(path, TYPE_FILE);
+    console.log("get_file: " + full_path);
+    var parent_dir = get_parent_dir(full_path);
+    var file_name = get_last_dir(full_path);
+    console.log(full_path, parent_dir, file_name);
     if (dirs[parent_dir] == undefined) {
         return null;
     }
@@ -246,6 +264,27 @@ function get_file(path) {
         }
     }
     return null;
+}
+
+// 親ディレクトリを取得
+function get_parent_dir(path) {
+    // 最後が '/' で終わっていなければ追加
+    if (path[path.length - 1] != "/") {
+        path += "/";
+    }
+    var path = path.split("/");
+    var parent_dir = path.slice(0, -2).join("/") + "/";
+    return parent_dir;
+}
+
+// ファイルパスから最後のディレクトリ名を取得
+function get_last_dir(path) {
+    // 最後が '/' で終わっていなければ追加
+    if (path[path.length - 1] != "/") {
+        path += "/";
+    }
+    var path = path.split("/");
+    return path.slice(-2, -1)[0];
 }
 
 var func_obj = [];
@@ -258,13 +297,9 @@ func_obj["cd"] = function() {
     }
     else {
         // 相対パス
-        var path = parse_path(get_arg(1));
-        console.log(path);
-        var fillpaths = fullparh_in_dir(current_dir);
-        console.log(fillpaths);
-        console.log(path);
-        for (var i=0; i<fillpaths.length; i++) {
-            if (fillpaths[i] == path) {
+        var path = parse_path(get_arg(1), TYPE_DIR);
+        for (let key in dirs) {
+            if (key == path) {
                 current_dir = path;
                 return 0;
             }
@@ -303,14 +338,28 @@ func_obj["help"] = function() {
 }
 
 func_obj["ls"] = function() {
-    var names = names_in_dir(current_dir);
-    for (var i=0; i<names.length; i++) {
-        printfd(names[i]+ "\n");
+    var path = current_dir;
+    if (args.length > 1) {
+        path = parse_path(get_arg(1), TYPE_DIR);
+    }
+    var fullpaths = fullpath_in_dir(path);
+    for (var i=0; i<fullpaths.length; i++) {
+        printfd(fullpaths[i] + "\n");
     }
     return 0;
 }
 
 func_obj["mkdir"] = function() {
+    // '/' が含まれている場合はパスを解決
+    if (get_arg(1).includes("/")) {
+        var parent_dir = get_parent_dir(get_arg(1));
+        var dir_name = get_last_dir(get_arg(1));
+        dirs[parent_dir + dir_name + "/"] = [];
+        var new_dir = new FileSystemObject(dir_name, parent_dir + dir_name + "/", TYPE_DIR);
+        dirs[parent_dir].push(new_dir);
+        return 0;
+    }
+    // それ以外はカレントディレクトリに作成
     dirs[current_dir + get_arg(1) + "/"] = [];
     var new_dir = new FileSystemObject(get_arg(1), current_dir + get_arg(1) + "/", TYPE_DIR);
     dirs[current_dir].push(new_dir);
