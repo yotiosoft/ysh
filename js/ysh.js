@@ -57,9 +57,17 @@ function boot() {
     // シェルの初期化
     fd_buffers[shell_fd] = new FileDescriptor();
 
+    // ファイルの用意
+    var readme_txt = new FileSystemObject("readme.txt", "/root/readme.txt", TYPE_FILE);
+    readme_txt.set_content("Welcome to ysh!\nThis is a fake shell for web browser made with JavaScript.\nFiles and directories are virtual and they are not stored in the server.\nYsh is still under development and buggy, so I will fix them as soon as possible.\nI hope you enjoy using ysh.");
+    add_file(readme_txt, "/root/");
+    var profile_txt = new FileSystemObject("profile.txt", "/root/profile.txt", TYPE_FILE);
+    profile_txt.set_content("I'm yotio, a computer-science student in Japan.\nI'm interested in OS Kernels, Developing CLI Tools, and Web Development.\nI also like playing city-building games.");
+    add_file(profile_txt, "/root/");
+
     // 起動時の表示
     printfd("ysh ver.1.0\n");
-    printfd("(c) YotioSoft 2022-2025 All rights reserved.\n\n");
+    printfd("(c) yotio 2022-2025 All rights reserved.\n\n");
     printfd("To see the list of commands, type 'help'.\n");
 }
 
@@ -97,6 +105,10 @@ function shellclear() {
     if (current_fd == shell_fd) {
         updateshell();
     }
+}
+
+function add_file(file, dir) {
+    dirs[dir].push(file);
 }
 
 function waiting() {
@@ -238,7 +250,7 @@ function output_file(fd_num) {
     var output_file_name = fd_buffers[fd_num].output_file;
     var file_object = new FileSystemObject(output_file_name, current_dir + output_file_name, TYPE_FILE);
     file_object.set_content(fd_buffers[fd_num].fd_buffer);
-    dirs[current_dir].push(file_object);
+    add_file(file_object, current_dir);
 }
 
 // 絶対パス・相対パスからファイルを取得
@@ -356,13 +368,13 @@ func_obj["mkdir"] = function() {
         var dir_name = get_last_dir(get_arg(1));
         dirs[parent_dir + dir_name + "/"] = [];
         var new_dir = new FileSystemObject(dir_name, parent_dir + dir_name + "/", TYPE_DIR);
-        dirs[parent_dir].push(new_dir);
+        add_file(new_dir, parent_dir);
         return 0;
     }
     // それ以外はカレントディレクトリに作成
     dirs[current_dir + get_arg(1) + "/"] = [];
     var new_dir = new FileSystemObject(get_arg(1), current_dir + get_arg(1) + "/", TYPE_DIR);
-    dirs[current_dir].push(new_dir);
+    add_file(new_dir, current_dir);
     return 0;
 }
 
