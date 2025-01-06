@@ -2,18 +2,31 @@ var args = [];
 var dirs = [];
 var current_dir = "/root/";
 
+const EDITOR_HEADER = [
+    "Ctrl+S to save and exit. Ctrl+C to exit without saving.\n",
+    "------------------------------------------------------\n"
+]
+
 const shell_fd = 0;
 var current_fd = shell_fd;
 var fd_buffers = [];
+const MODE_SHELL = 0;
+const MODE_EDIT = 1;
+var shell_mode = MODE_SHELL;
+const DEST_SHELL = 0;
+const DEST_FILE = 1;
+
 class FileDescriptor {
     fd_number;
     fd_buffer;
     output_file;
+    dest;
 
-    constructor() {
+    constructor(dest) {
         this.fd_number = fd_buffers.length;
         this.fd_buffer = "";
         this.output_file = "";
+        this.dest = dest;
     }
 
     add_line(str) {
@@ -55,7 +68,7 @@ function boot() {
     shell.addEventListener('keydown', on_key_press);
 
     // シェルの初期化
-    fd_buffers[shell_fd] = new FileDescriptor();
+    fd_buffers[shell_fd] = new FileDescriptor(DEST_SHELL);
 
     // ファイルの用意
     var readme_txt = new FileSystemObject("readme.txt", "/root/readme.txt", TYPE_FILE);
@@ -71,8 +84,8 @@ function boot() {
     printfd("To see the list of commands, type 'help'.\n");
 }
 
-function newfd() {
-    var fd = new FileDescriptor();
+function newfd(dest) {
+    var fd = new FileDescriptor(dest);
     fd_buffers.push(fd);
     return fd.fd_number;
 }
@@ -82,32 +95,33 @@ function switchfd(shell_index) {
         output_file(current_fd);
     }
     current_fd = shell_index;
-    if (current_fd == shell_fd) {
+    if (fd_buffers[current_fd].dest == DEST_SHELL) {
         updateshell();
     }
 }
 
 function printfd(str) {
     fd_buffers[current_fd].fd_buffer += str;
-    if (current_fd == shell_fd) {
+    if (fd_buffers[current_fd].dest == DEST_SHELL) {
         updateshell();
     }
 }
 
 function updateshell() {
     var shell = document.getElementById('shell_input');
-    shell.value = fd_buffers[shell_fd].fd_buffer;
+    shell.value = fd_buffers[current_fd].fd_buffer;
     shell.scrollTop = shell.scrollHeight;
 }
 
 function shellclear() {
     fd_buffers[current_fd].fd_buffer = "";
-    if (current_fd == shell_fd) {
+    if (fd_buffers[current_fd].dest == DEST_SHELL) {
         updateshell();
     }
 }
 
 function add_file(file, dir) {
+    console.log("add_file: " + file.name + " to " + dir);
     dirs[dir].push(file);
 }
 
@@ -124,7 +138,26 @@ function on_key_press(e) {
     if (e.key == 'Enter' && !e.isComposing) {
         e.preventDefault();
         onInputCompleted();
-
+        return true;
+    }
+    // edit mode
+    else if (shell_mode == MODE_EDIT && e.key == 's' && e.ctrlKey) {
+        e.preventDefault();
+        // エディタのヘッダ部分を削除
+        fd_buffers[current_fd].fd_buffer = fd_buffers[current_fd].fd_buffer.split(EDITOR_HEADER[0]).join("");
+        fd_buffers[current_fd].fd_buffer = fd_buffers[current_fd].fd_buffer.split(EDITOR_HEADER[1]).join("");
+        output_file(current_fd);
+        switchfd(shell_fd);
+        shell_mode = MODE_SHELL;
+        waiting();
+        return true;
+    }
+    else if (shell_mode == MODE_EDIT && e.key == 'c' && e.ctrlKey) {
+        e.preventDefault();
+        fd_buffers[current_fd].output_file = "";
+        switchfd(shell_fd);
+        shell_mode = MODE_SHELL;
+        waiting();
         return true;
     }
     return false;
@@ -137,25 +170,32 @@ function onInputCompleted() {
     var lines = fd_buffers[current_fd].fd_buffer.replace(/\r\n|\r/g,"\n").split('\n');
     var last_line = lines[lines.length - 1].substring(2);
     fd_buffers[current_fd].fd_buffer += '\n';
-    if (current_fd == shell_fd) {
+    if (fd_buffers[current_fd].dest == DEST_SHELL) {
         updateshell();
     }
-    var ret = parse_and_run(last_line);
+    // コマンド実行
+    if (shell_mode == MODE_SHELL) {
+        parse_and_run(last_line);
+    }
 
     //if (ret == 1) {
     //    printfd("command returns an error.\n");
     //}
 
     // 次の入力へ
-    waiting();
+    if (shell_mode == MODE_SHELL) {
+        switchfd(shell_fd);
+        waiting();
+    }
 }
 
 function parse_and_run(str) {
     // '>' を含む場合は fd を生成・変更
     if (str.includes(">")) {
-        var fd_num = newfd();
+        var fd_num = newfd(DEST_FILE);
         var output_file_name = str.split(">")[1].trim();
-        fd_buffers[fd_num].output_file = output_file_name;
+        var output_file_path = parse_path(output_file_name, TYPE_FILE);
+        fd_buffers[fd_num].output_file = output_file_path;
         switchfd(fd_num);
         str = str.split(">")[0];
     }
@@ -166,7 +206,6 @@ function parse_and_run(str) {
     // 実行
     if (args[0] in func_obj) {
         var ret = func_obj[args[0]]();
-        switchfd(shell_fd);
         return ret;
     }
     printfd("command not found: " + args[0] + '\n');
@@ -174,6 +213,9 @@ function parse_and_run(str) {
 }
 
 function get_arg(num) {
+    if (num >= args.length) {
+        return null;
+    }
     return args[num];
 }
 
@@ -247,10 +289,32 @@ function fullpath_in_dir(dir) {
 
 // 仮想ファイルを出力
 function output_file(fd_num) {
-    var output_file_name = fd_buffers[fd_num].output_file;
-    var file_object = new FileSystemObject(output_file_name, current_dir + output_file_name, TYPE_FILE);
-    file_object.set_content(fd_buffers[fd_num].fd_buffer);
-    add_file(file_object, current_dir);
+    var output_file_path = fd_buffers[fd_num].output_file;
+    if (file_exists(output_file_path)) {
+        var file = get_file(output_file_path);
+        file.set_content(fd_buffers[fd_num].fd_buffer);
+    }
+    else {
+        var file_object = new FileSystemObject(get_last_dir(output_file_path), output_file_path, TYPE_FILE);
+        file_object.set_content(fd_buffers[fd_num].fd_buffer);
+        add_file(file_object, get_parent_dir(output_file_path));
+    }
+}
+
+// ファイルが存在するか確認
+function file_exists(path) {
+    var full_path = parse_path(path, TYPE_FILE);
+    var parent_dir = get_parent_dir(full_path);
+    var file_name = get_last_dir(full_path);
+    if (dirs[parent_dir] == undefined) {
+        return false;
+    }
+    for (var i=0; i<dirs[parent_dir].length; i++) {
+        if (dirs[parent_dir][i].name == file_name) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // 絶対パス・相対パスからファイルを取得
@@ -303,13 +367,19 @@ var func_obj = [];
 
 func_obj["cd"] = function() {
     var names = names_in_dir(current_dir);
-    if (get_arg(1) in names) {
+    let arg1 = get_arg(1);
+    if (arg1 == null) {
+        printfd("usage: cd [dir]\n");
+        return 1;
+    }
+
+    if (arg1 in names) {
         // 絶対パス
-        current_dir = get_arg(1);
+        current_dir = arg1;
     }
     else {
         // 相対パス
-        var path = parse_path(get_arg(1), TYPE_DIR);
+        var path = parse_path(arg1, TYPE_DIR);
         for (let key in dirs) {
             if (key == path) {
                 current_dir = path;
@@ -317,7 +387,7 @@ func_obj["cd"] = function() {
             }
         }
     }
-    printfd(get_arg(1) + " not found.\n");
+    printfd(arg1 + " not found.\n");
     return 1;
 }
 
@@ -352,7 +422,12 @@ func_obj["help"] = function() {
 func_obj["ls"] = function() {
     var path = current_dir;
     if (args.length > 1) {
-        path = parse_path(get_arg(1), TYPE_DIR);
+        var arg1 = get_arg(1);
+        if (arg1 == null) {
+            printfd("usage: ls [dir]\n");
+            return 1;
+        }
+        path = parse_path(arg1, TYPE_DIR);
     }
     var fullpaths = fullpath_in_dir(path);
     for (var i=0; i<fullpaths.length; i++) {
@@ -363,17 +438,22 @@ func_obj["ls"] = function() {
 
 func_obj["mkdir"] = function() {
     // '/' が含まれている場合はパスを解決
-    if (get_arg(1).includes("/")) {
-        var parent_dir = get_parent_dir(get_arg(1));
-        var dir_name = get_last_dir(get_arg(1));
+    var path = get_arg(1);
+    if (path == null) {
+        printfd("usage: mkdir [dir]\n");
+        return 1;
+    }
+    if (path.includes("/")) {
+        var parent_dir = get_parent_dir(path);
+        var dir_name = get_last_dir(path);
         dirs[parent_dir + dir_name + "/"] = [];
         var new_dir = new FileSystemObject(dir_name, parent_dir + dir_name + "/", TYPE_DIR);
         add_file(new_dir, parent_dir);
         return 0;
     }
     // それ以外はカレントディレクトリに作成
-    dirs[current_dir + get_arg(1) + "/"] = [];
-    var new_dir = new FileSystemObject(get_arg(1), current_dir + get_arg(1) + "/", TYPE_DIR);
+    dirs[current_dir + path + "/"] = [];
+    var new_dir = new FileSystemObject(path, current_dir + path + "/", TYPE_DIR);
     add_file(new_dir, current_dir);
     return 0;
 }
@@ -385,6 +465,10 @@ func_obj["pwd"] = function() {
 
 func_obj["cat"] = function() {
     var filepath= get_arg(1);
+    if (filepath == null) {
+        printfd("usage: cat [file]\n");
+        return 1;
+    }
     var file = get_file(filepath);
     if (file != null) {
         printfd(file.content + "\n");
@@ -392,4 +476,37 @@ func_obj["cat"] = function() {
     }
     printfd(filepath + " not found.\n");
     return 1;
+}
+
+func_obj["edit"] = function() {
+    var filepath= get_arg(1);
+    if (filepath == null) {
+        printfd("usage: edit [file]\n");
+        return 1;
+    }
+    var file = get_file(filepath);
+    shell_mode = MODE_EDIT;
+
+    if (file != null && file.type != TYPE_FILE) {
+        printfd(full_path + " is not a file.\n");
+        return 1;
+    }
+
+    var fd = newfd(DEST_SHELL);
+    switchfd(fd);
+    if (file != null) {
+        fd_buffers[fd].output_file = file.fullpath;
+    }
+    else {
+        var file_fullpath = parse_path(filepath, TYPE_FILE);
+        fd_buffers[fd].output_file = file_fullpath;
+    }
+    for (var i=0; i<EDITOR_HEADER.length; i++) {
+        printfd(EDITOR_HEADER[i]);
+    }
+    if (file != null) {
+        printfd(file.content);
+    }
+    
+    return 0;
 }

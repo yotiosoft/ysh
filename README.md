@@ -1,3 +1,3 @@
 # ysh
 A shell-like web page.  
-[https://ysh.yotiosoft.com](https://ysh.yotiosoft.com)
+[https://sh.yotio.jp](https://sh.yotio.jp)
