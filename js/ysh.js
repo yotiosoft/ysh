@@ -61,22 +61,29 @@ class FileSystemObject {
 function boot() {
     var shell = document.getElementById('shell_input');
 
-    // ディレクトリの初期化
-    dirs["/root/"] = [];
+    // LocalStorage からデータを読み込み
+    //let ls_exists = load_from_localstorage();
+    let ls_exists = false;
+
+    // データがない場合は初期化
+    if (!ls_exists) {
+        // ディレクトリの初期化
+        dirs["/root/"] = [];
+
+        // ファイルの用意
+        var readme_txt = new FileSystemObject("readme.txt", "/root/readme.txt", TYPE_FILE);
+        readme_txt.set_content("Welcome to ysh!\nThis is a fake shell for web browser made with JavaScript.\nFiles and directories are virtual and they are not stored in the server.\nYsh is still under development and buggy, so I will fix them as soon as possible.\nI hope you enjoy using ysh.");
+        add_file(readme_txt, "/root/");
+        var profile_txt = new FileSystemObject("profile.txt", "/root/profile.txt", TYPE_FILE);
+        profile_txt.set_content("I'm yotio, a computer-science student in Japan.\nI'm interested in OS Kernels, Developing CLI Tools, and Web Development.\nI also like playing city-building games.");
+        add_file(profile_txt, "/root/");
+    }
 
     // 入力完了時の動作
     shell.addEventListener('keydown', on_key_press);
 
     // シェルの初期化
     fd_buffers[shell_fd] = new FileDescriptor(DEST_SHELL);
-
-    // ファイルの用意
-    var readme_txt = new FileSystemObject("readme.txt", "/root/readme.txt", TYPE_FILE);
-    readme_txt.set_content("Welcome to ysh!\nThis is a fake shell for web browser made with JavaScript.\nFiles and directories are virtual and they are not stored in the server.\nYsh is still under development and buggy, so I will fix them as soon as possible.\nI hope you enjoy using ysh.");
-    add_file(readme_txt, "/root/");
-    var profile_txt = new FileSystemObject("profile.txt", "/root/profile.txt", TYPE_FILE);
-    profile_txt.set_content("I'm yotio, a computer-science student in Japan.\nI'm interested in OS Kernels, Developing CLI Tools, and Web Development.\nI also like playing city-building games.");
-    add_file(profile_txt, "/root/");
 
     // 起動時の表示
     printfd("ysh ver.1.0\n");
@@ -123,6 +130,7 @@ function shellclear() {
 function add_file(file, dir) {
     console.log("add_file: " + file.name + " to " + dir);
     dirs[dir].push(file);
+    //save_to_localstorage();
 }
 
 function waiting() {
@@ -361,6 +369,28 @@ function get_last_dir(path) {
     }
     var path = path.split("/");
     return path.slice(-2, -1)[0];
+}
+
+// ブラウザの LocalStorage に保存
+function save_to_localstorage() {
+    var json_dirs = JSON.stringify(dirs);
+    console.log(json_dirs);
+    localStorage.setItem("dirs", json_dirs);
+
+    console.log("save_to_localstorage");
+}
+
+// ブラウザの LocalStorage から読み込み
+function load_from_localstorage() {
+    console.log("load_from_localstorage");
+
+    var json_dirs = localStorage.getItem("dirs");
+    if (json_dirs == null) {
+        return false;
+    }
+    dirs = JSON.parse(json_dirs);
+    console.log(dirs);
+    return true;
 }
 
 var func_obj = [];
